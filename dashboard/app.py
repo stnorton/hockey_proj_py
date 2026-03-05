@@ -100,7 +100,8 @@ def min_shots_slider(df: pd.DataFrame, col: str, key: str, label: str = "Min sho
     if col not in df.columns:
         return df
     max_v = int(df[col].max()) if col in df.columns else 100
-    min_v = st.sidebar.slider(label, 0, max_v, max(0, min(50, max_v)), step=5, key=key)
+    default_v = max(0, min(50, int(df[col].quantile(0.75))))
+    min_v = st.sidebar.slider(label, 0, max_v, default_v, step=5, key=key)
     return df[df[col] >= min_v]
 
 
