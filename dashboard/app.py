@@ -567,8 +567,8 @@ Not all goals (or saves) are created equal. A goal against an elite goalie is ha
 than one against a backup; a save against a top shooter is harder to make than one against a
 fourth-liner. Traditional stats like save percentage ignore this: they treat every shot the same.
 
-This dashboard uses a statistical model called **Item Response Theory (IRT)** — borrowed from
-educational testing — to disentangle goalie skill from shooter skill. The model observes every
+This dashboard uses a statistical model called **Item Response Theory (IRT)**, borrowed from
+educational testing, to disentangle goalie skill from shooter skill. The model observes every
 shot in the NHL season, knows the pre-shot expected-goal probability (from a separate xG model),
 and estimates two hidden quantities each week:
 
@@ -581,7 +581,7 @@ allowed to change week-by-week, so the model captures hot streaks, slumps, and g
 improvement.
 
 From these skill estimates we compute **GSAx (IRT)** for goalies and **FSAx (IRT)** for
-shooters — goals saved or scored above expectation after adjusting for opponent quality.
+shooters: goals saved or scored above expectation after adjusting for opponent quality.
 The **Head-to-Head** page lets you match any goalie against any shooter and estimate how
 many goals per 100 shots the shooter would score.
 
@@ -643,6 +643,17 @@ data filtered by on-ice strength state: all situations, even-strength (5v5), and
             f"- Situation: {meta.get('situation_label', '?')}  \n"
             f"- Goalies: {meta.get('n_goalies', '?')}  |  Shooters: {meta.get('n_shooters', '?')}"
         )
+
+    # ── Attribution ───────────────────────────────────────────────────────────
+    st.subheader("Attribution")
+    st.markdown(
+        "Pre-shot expected goal (xG) probabilities are provided by the "
+        "[**Statsyuk xGoals Model**](https://github.com/tannermanett/Statsyuk-xGoals-Model) "
+        "by [tannermanett](https://github.com/tannermanett), "
+        "an XGBoost-based pipeline trained on NHL shot-event data.  \n"
+        "The IRT model in this dashboard re-calibrates the xG log-odds (via β₀ and α) "
+        "and uses the resulting probabilities as shot-quality inputs."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
