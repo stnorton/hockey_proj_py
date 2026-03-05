@@ -1,0 +1,41 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env
+
+# ── Model state files (too large for GitHub) ─────────────────────────────────
+model_output/state_*.pkl
+
+# ── Raw play-by-play data (large, not needed to run the dashboard) ────────────
+ingest_scripts/nhl_pbp_*.csv
+ingest_scripts/nhl_pbp_allfields_*.csv
+
+# ── Intermediate model output CSVs (reproducible from run_model.py) ──────────
+model_output/goalie_gsax*.csv
+model_output/goalie_skills*.csv
+model_output/shooter_skills*.csv
+
+# ── Keep the player name/info caches (avoids NHL API calls) ──────────────────
+!model_output/player_names_cache.json
+!model_output/player_info_cache.json
+
+# ── Third-party subdir with its own git repo ──────────────────────────────────
+Statsyuk-xGoals-Model/
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+*.swo
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
