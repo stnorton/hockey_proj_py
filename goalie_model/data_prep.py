@@ -268,6 +268,13 @@ def _clean_raw(df: pd.DataFrame, config) -> pd.DataFrame:
         & ~df["goalie_id"].isin(["nan", "None", ""])
     ]
 
+    # ── Shootout filter ───────────────────────────────────────────────────────
+    # Exclude shootout events — they are never counted in official GA/GF stats.
+    if "periodDescriptor.periodType" in df.columns:
+        df = df[df["periodDescriptor.periodType"] != "SO"]
+    elif "period_number" in df.columns:
+        df = df[df["period_number"] != 5]
+
     # ── Strength-state filter ─────────────────────────────────────────────────
     if config.strength_states is not None:
         df = df[df["strength_state"].isin(config.strength_states)]

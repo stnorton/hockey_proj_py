@@ -155,7 +155,7 @@ def trajectory_chart(
     # confidence bands in low-shot weeks don't collapse the chart.
     y_min = float(df[y_col].min())
     y_max = float(df[y_col].max())
-    pad   = max((y_max - y_min) * 0.25, 0.15)
+    pad   = max((y_max - y_min) * 0.10, 0.05)
     dom_lo, dom_hi = y_min - pad, y_max + pad
     df[lo_col] = df[lo_col].clip(lower=dom_lo)
     df[hi_col] = df[hi_col].clip(upper=dom_hi)
@@ -589,6 +589,15 @@ many goals per 100 shots the shooter would score.
 Results can be viewed for **all situations**, **even-strength (5v5)** only, or **power play** only.
 """)
 
+    st.subheader("What You Can Do with this Dash")
+    st.markdown("""
+* Answer the age-old question: is this goalie really that good, or are the skaters they face just bad?
+* See whether a shooter's high goal total is due to their own finishing skill or just facing weak goalies.
+* Track a player's form over the season and see who's on the rise or in a slump.
+* Look at hypothetical matchups between any goalie and any shooter to see who has the edge.
+* Compare the best players in all situations, 5v5 only, or power play only to see who's best in what context.
+                """)
+
     # ── Technical description ─────────────────────────────────────────────────
     st.subheader("Technical Description")
     st.markdown("""
@@ -706,7 +715,7 @@ def main() -> None:
             f"Situation: **{meta.get('situation_label', SITUATION_LABELS[situation])}**"
         )
 
-    page_name = st.sidebar.radio("Page", list(PAGES.keys()))
+    page_name = st.sidebar.radio("Page", list(PAGES.keys()), index=list(PAGES.keys()).index("📖 Methodology"))
 
     if not (_data_dir(situation) / "goalie_summary.csv").exists():
         st.warning(
