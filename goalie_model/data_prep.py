@@ -131,7 +131,7 @@ def _decode_strength(code) -> str:
     return "OTHER"
 
 
-def _assign_season(game_id: int, seasons: List[int]) -> Optional[int]:
+def _assign_season(game_id, seasons: List[int]) -> Optional[int]:
     """
     Return 0-based season index (0=prev, 1=curr) from a numeric game_id.
 
@@ -139,7 +139,7 @@ def _assign_season(game_id: int, seasons: List[int]) -> Optional[int]:
         2024 01 0001  →  2024-25 season  →  season_year = 2024
     """
     try:
-        year = int(game_id) // 1_000_000
+        year = int(float(game_id)) // 1_000_000
     except (ValueError, TypeError):
         return None
     if year == seasons[0]:
