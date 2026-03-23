@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-03-18 16:18 UTC",
+  "last_updated": "2026-03-23 17:34 UTC",
   "season": "2025-26",
   "situation": "all",
   "situation_label": "All Situations",
@@ -8,6 +8,6 @@
   "n_goalie_weekly_rows": 3894,
   "n_shooter_weekly_rows": 33726,
   "beta0": -0.248715,
-  "alpha": 0.980557,
+  "alpha": 0.980556,
   "mean_xg_logit": -2.704909
 }
