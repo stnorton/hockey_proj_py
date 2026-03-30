@@ -1,13 +1,13 @@
 {
-  "last_updated": "2026-03-30 17:07 UTC",
+  "last_updated": "2026-03-30 17:13 UTC",
   "season": "2025-26",
   "situation": "all",
   "situation_label": "All Situations",
-  "n_goalies": 144,
-  "n_shooters": 1533,
-  "n_goalie_weekly_rows": 3894,
-  "n_shooter_weekly_rows": 33726,
-  "beta0": -0.248715,
-  "alpha": 0.980556,
-  "mean_xg_logit": -2.704909
+  "n_goalies": 145,
+  "n_shooters": 1539,
+  "n_goalie_weekly_rows": 4450,
+  "n_shooter_weekly_rows": 38475,
+  "beta0": -0.261357,
+  "alpha": 0.976549,
+  "mean_xg_logit": -2.703822
 }
