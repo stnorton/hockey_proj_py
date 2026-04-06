@@ -1,13 +1,13 @@
 {
-  "last_updated": "2026-03-30 17:13 UTC",
+  "last_updated": "2026-04-06 22:29 UTC",
   "season": "2025-26",
   "situation": "even",
   "situation_label": "Even Strength (5v5)",
   "n_goalies": 145,
-  "n_shooters": 1525,
-  "n_goalie_weekly_rows": 4450,
-  "n_shooter_weekly_rows": 38125,
-  "beta0": -0.169132,
-  "alpha": 1.042497,
-  "mean_xg_logit": -2.777549
+  "n_shooters": 1526,
+  "n_goalie_weekly_rows": 4628,
+  "n_shooter_weekly_rows": 39676,
+  "beta0": -0.159129,
+  "alpha": 1.0453,
+  "mean_xg_logit": -2.777925
 }
