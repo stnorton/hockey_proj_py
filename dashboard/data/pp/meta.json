@@ -1,13 +1,13 @@
 {
-  "last_updated": "2026-04-06 22:29 UTC",
+  "last_updated": "2026-04-13 16:32 UTC",
   "season": "2025-26",
   "situation": "pp",
   "situation_label": "Power Play",
   "n_goalies": 125,
-  "n_shooters": 988,
-  "n_goalie_weekly_rows": 4004,
-  "n_shooter_weekly_rows": 25688,
-  "beta0": -0.785531,
-  "alpha": 0.658358,
-  "mean_xg_logit": -2.396329
+  "n_shooters": 991,
+  "n_goalie_weekly_rows": 4158,
+  "n_shooter_weekly_rows": 26757,
+  "beta0": -0.781217,
+  "alpha": 0.659408,
+  "mean_xg_logit": -2.396064
 }
