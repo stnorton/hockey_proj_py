@@ -126,17 +126,30 @@ def get_all_games_with_dates(
 
     df_games = pd.DataFrame(records).drop_duplicates("game_id")
 
+    # ── Regular-season filter ─────────────────────────────────────────────────
+    # NHL game IDs are formatted as YYYYTTGGGG where TT encodes the game type:
+    #   01 = preseason, 02 = regular season, 03 = playoffs.
+    # We only want regular-season games (TT == "02") so that playoff games
+    # fetched from the team schedule are never ingested into the stats model.
+    before_type = len(df_games)
+    df_games = df_games[
+        df_games["game_id"].astype(str).str.strip().str[4:6] == "02"
+    ].copy()
+    filtered_type = before_type - len(df_games)
+    if filtered_type:
+        print(f"⚙️  Filtered out {filtered_type} non-regular-season game(s) (preseason/playoffs).")
+
     if cutoff_date is not None:
         before = len(df_games)
         df_games = df_games[
             pd.to_datetime(df_games["game_date"]).dt.date <= cutoff_date
         ].copy()
         print(
-            f"✅ Retrieved {len(df_games)} games on or before {cutoff_date} "
+            f"✅ Retrieved {len(df_games)} regular-season games on or before {cutoff_date} "
             f"(filtered from {before}) for {season}"
         )
     else:
-        print(f"✅ Retrieved {len(df_games)} unique games with dates for {season}")
+        print(f"✅ Retrieved {len(df_games)} unique regular-season games with dates for {season}")
 
     return df_games
 
@@ -248,6 +261,9 @@ def fetch_season_all_fields(
     # Append to existing file if resuming, otherwise write fresh
     import os
     if resume_after is not None and os.path.exists(out_csv):
+        # Reorder columns to match the existing file to prevent misalignment
+        existing_cols = pd.read_csv(out_csv, nrows=0).columns.tolist()
+        combined = combined.reindex(columns=existing_cols)
         combined.to_csv(out_csv, mode="a", header=False, index=False)
         print(f"✅ Appended {len(combined):,} new plays to {out_csv}")
     else:
