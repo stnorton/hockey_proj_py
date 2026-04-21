@@ -1,14 +1,14 @@
 {
-  "last_updated": "2026-04-21 18:03 UTC",
+  "last_updated": "2026-04-21 18:53 UTC",
   "season": "2025-26",
   "situation": "all",
   "situation_label": "All Situations",
-  "n_goalies": 145,
-  "n_shooters": 1543,
-  "n_goalie_weekly_rows": 4806,
-  "n_shooter_weekly_rows": 41661,
-  "beta0": -0.252145,
-  "alpha": 0.979827,
-  "mean_xg_logit": -2.703789,
-  "playoff_start_week": 27
+  "n_goalies": 147,
+  "n_shooters": 1544,
+  "n_goalie_weekly_rows": 5012,
+  "n_shooter_weekly_rows": 43232,
+  "beta0": -0.247937,
+  "alpha": 0.981757,
+  "mean_xg_logit": -2.703556,
+  "playoff_start_week": 28
 }
