@@ -1,14 +1,14 @@
 {
-  "last_updated": "2026-05-27 19:30 UTC",
+  "last_updated": "2026-05-27 21:10 UTC",
   "season": "2025-26",
   "situation": "even",
   "situation_label": "Even Strength (5v5)",
   "n_goalies": 147,
   "n_shooters": 1530,
-  "n_goalie_weekly_rows": 5012,
-  "n_shooter_weekly_rows": 42840,
-  "beta0": -0.155425,
-  "alpha": 1.04748,
-  "mean_xg_logit": -2.777341,
-  "playoff_start_week": 28
+  "n_goalie_weekly_rows": 6086,
+  "n_shooter_weekly_rows": 52020,
+  "beta0": -0.161665,
+  "alpha": 1.045365,
+  "mean_xg_logit": -2.78121,
+  "playoff_start_week": 27
 }
