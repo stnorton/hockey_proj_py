@@ -22,6 +22,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import math
+from math import sqrt
+
 import numpy as np
 import pandas as pd
 import requests
@@ -88,6 +91,16 @@ def parse_args() -> argparse.Namespace:
         "--run-all",
         action="store_true",
         help="Build data for all three situations (all, even, pp) sequentially.",
+    )
+    p.add_argument(
+        "--prev",
+        default=str(ROOT / "ingest_scripts" / "nhl_pbp_2024_2025_with_xg.csv"),
+        help="Path to previous-season xG CSV (used for hex map coordinate data).",
+    )
+    p.add_argument(
+        "--curr",
+        default=str(ROOT / "ingest_scripts" / "nhl_pbp_2025_2026_with_xg.csv"),
+        help="Path to current-season xG CSV (used for hex map coordinate data).",
     )
     return p.parse_args()
 
@@ -229,6 +242,278 @@ def compute_fsax(
     if len(df):
         df = df.sort_values("fsax", ascending=False).reset_index(drop=True)
     return df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hex map computation
+# ─────────────────────────────────────────────────────────────────────────────
+
+HEX_SIZE_FEET = 15.0
+
+
+def _hex_axial(x: float, y: float) -> tuple[int, int]:
+    """Convert Cartesian (x, y) to rounded axial hex coordinates (q, r)."""
+    q = (2 / 3) * x / HEX_SIZE_FEET
+    r = (-1 / 3) * x / HEX_SIZE_FEET + (sqrt(3) / 3) * y / HEX_SIZE_FEET
+    return round(q), round(r)
+
+
+def _hex_center(q: int, r: int) -> tuple[float, float]:
+    """Convert axial hex (q, r) to Cartesian centre (x, y) in feet."""
+    x = HEX_SIZE_FEET * (3 / 2) * q
+    y = HEX_SIZE_FEET * (sqrt(3) / 2 * q + sqrt(3) * r)
+    return round(x, 2), round(y, 2)
+
+
+def _decode_strength_code(code) -> str:
+    try:
+        code = int(float(code))
+    except (TypeError, ValueError):
+        return "EVEN"
+    away = (code // 100) % 10
+    home = (code // 10) % 10
+    if away == home:
+        return "EVEN"
+    elif away > home:
+        return "PP"
+    return "PK"
+
+
+def build_hex_data(
+    raw_csv_paths: list[str],
+    state,
+    model: DynamicIRTModel,
+    season_idx: int,
+    strength_states,          # None = all, ["EVEN"] = even, ["PP"] = pp
+    names: dict,
+    info: dict,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Compute per-hex shot deviation stats for shooters, goalies, and league.
+
+    Returns
+    -------
+    hex_shooter, hex_goalie, hex_league DataFrames
+    """
+    # ── Load & combine raw shot CSVs ──────────────────────────────────────────
+    frames = []
+    for p in raw_csv_paths:
+        if os.path.exists(p):
+            frames.append(pd.read_csv(p, low_memory=False))
+    if not frames:
+        log.warning("No raw CSV paths found for hex map build; skipping.")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    df = pd.concat(frames, ignore_index=True)
+
+    # ── Column standardisation (mirrors data_prep._clean_raw) ─────────────────
+    if "shooter_id" not in df.columns:
+        shooting = df.get("details.shootingPlayerId")
+        scoring  = df.get("details.scoringPlayerId")
+        if shooting is not None and scoring is not None:
+            df["shooter_id"] = shooting.fillna(scoring)
+        elif shooting is not None:
+            df["shooter_id"] = shooting
+        else:
+            df["shooter_id"] = scoring
+
+    if "goalie_id" not in df.columns:
+        df["goalie_id"] = df.get("details.goalieInNetId")
+
+    if "is_goal" not in df.columns:
+        df["is_goal"] = df.get("shot_made", 0)
+
+    if "xg" not in df.columns:
+        df["xg"] = df.get("xG", np.nan)
+
+    if "strength_state" not in df.columns:
+        sc = df.get("situation_code")
+        if sc is not None:
+            df["strength_state"] = sc.apply(_decode_strength_code)
+        else:
+            df["strength_state"] = "EVEN"
+
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
+
+    for col in ["shooter_id", "goalie_id", "game_id"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+    df["is_goal"] = pd.to_numeric(df["is_goal"], errors="coerce")
+    df["xg"]      = pd.to_numeric(df["xg"],      errors="coerce")
+
+    # Drop rows missing required fields
+    df = df.dropna(subset=["shooter_id", "goalie_id", "xg", "is_goal", "xCoord", "yCoord"])
+    df = df[~df["shooter_id"].isin(["nan", "None", ""]) &
+            ~df["goalie_id"].isin(["nan", "None", ""])]
+
+    # ── Shootout exclusion ────────────────────────────────────────────────────
+    if "periodDescriptor.periodType" in df.columns:
+        df = df[df["periodDescriptor.periodType"] != "SO"]
+
+    # ── Season filter: current season only ───────────────────────────────────
+    seasons = state.config.seasons
+    def _season_idx(gid):
+        try:
+            y = int(float(gid)) // 1_000_000
+        except Exception:
+            return None
+        if y == seasons[0]:
+            return 0
+        if y == seasons[1]:
+            return 1
+        return None
+
+    df["_season_idx"] = df["game_id"].apply(_season_idx)
+    df = df[df["_season_idx"] == season_idx].copy()
+
+    # ── Strength-state filter ─────────────────────────────────────────────────
+    if strength_states is not None:
+        df = df[df["strength_state"].isin(strength_states)]
+
+    if df.empty:
+        log.warning("No shots remain after season/strength filter for hex map.")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # ── Coordinate normalisation (all shots face right net) ───────────────────
+    def _norm(row):
+        x, y = float(row["xCoord"]), float(row["yCoord"])
+        side = str(row.get("homeTeamDefendingSide", "left")).lower()
+        return (-x, -y) if side == "right" else (x, y)
+
+    df[["x_norm", "y_norm"]] = pd.DataFrame(
+        df.apply(_norm, axis=1).tolist(), index=df.index, columns=["x_norm", "y_norm"]
+    )
+    df = df[df["x_norm"] > 0.0].copy()
+
+    if df.empty:
+        log.warning("No offensive-zone shots for hex map.")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # ── Hex assignment ────────────────────────────────────────────────────────
+    hex_coords = df.apply(lambda r: pd.Series(
+        _hex_axial(r["x_norm"], r["y_norm"]), index=["hex_q", "hex_r"]
+    ), axis=1)
+    df = pd.concat([df, hex_coords], axis=1)
+
+    # ── IRT-adjusted p_adj per shot ───────────────────────────────────────────
+    # Look up shooter mu_theta and goalie mu_phi from the model state
+    param = state.param_dict
+    # mu_theta: shape [n_shooters, n_seasons]
+    mu_theta_arr = np.asarray(param.get("mu_theta", np.zeros((model.n_shooters, model.n_seasons))))
+    mu_phi_arr   = np.asarray(param.get("mu_phi",   np.zeros((model.n_goalies,  model.n_seasons))))
+    beta0 = float(np.asarray(param.get("beta0", 0.0)).item())
+    alpha = float(np.asarray(param.get("alpha", 1.0)).item())
+
+    s2i = state.shooter_id_to_idx
+    g2i = state.goalie_id_to_idx
+
+    def _safe_logit(p: float) -> float:
+        p = max(1e-5, min(1 - 1e-5, p))
+        return math.log(p / (1 - p))
+
+    def _sigmoid(x: float) -> float:
+        return 1.0 / (1.0 + math.exp(-x))
+
+    def _p_adj(row):
+        sid = str(row["shooter_id"])
+        gid = str(row["goalie_id"])
+        xg  = float(row["xg"])
+        si  = s2i.get(sid, -1)
+        gi  = g2i.get(gid, -1)
+        theta = float(mu_theta_arr[si]) if si >= 0 else 0.0
+        phi   = float(mu_phi_arr[gi])   if gi >= 0 else 0.0
+        logit = beta0 + alpha * _safe_logit(xg) + theta - phi
+        return _sigmoid(logit)
+
+    log.info("Computing IRT-adjusted p_adj for %d hex-map shots …", len(df))
+    df["p_adj"] = df.apply(_p_adj, axis=1)
+
+    # ── League hex aggregate ──────────────────────────────────────────────────
+    hex_league = (
+        df.groupby(["hex_q", "hex_r"])
+        .agg(
+            shots  =("is_goal", "count"),
+            goals  =("is_goal", "sum"),
+            xg_sum =("xg",      "sum"),
+        )
+        .reset_index()
+    )
+    hex_league["goal_rate"] = (hex_league["goals"] / hex_league["shots"]).round(4)
+    hex_league["xg_rate"]   = (hex_league["xg_sum"] / hex_league["shots"]).round(4)
+    centres = hex_league.apply(
+        lambda r: pd.Series(_hex_center(int(r["hex_q"]), int(r["hex_r"])),
+                            index=["hex_x", "hex_y"]), axis=1
+    )
+    hex_league = pd.concat([hex_league, centres], axis=1)
+    col_order = ["hex_q", "hex_r", "hex_x", "hex_y", "shots", "goals", "xg_sum",
+                 "goal_rate", "xg_rate"]
+    hex_league = hex_league[col_order]
+
+    # ── Shooter hex aggregate ──────────────────────────────────────────────────
+    hex_shooter_raw = (
+        df.groupby(["shooter_id", "hex_q", "hex_r"])
+        .agg(
+            shots      =("is_goal", "count"),
+            goals      =("is_goal", "sum"),
+            xg_sum     =("xg",      "sum"),
+            irt_xg_sum =("p_adj",   "sum"),
+        )
+        .reset_index()
+    )
+    hex_shooter_raw["deviation"]    = (hex_shooter_raw["goals"] - hex_shooter_raw["irt_xg_sum"]).round(4)
+    hex_shooter_raw["dev_per_shot"] = (hex_shooter_raw["deviation"] / hex_shooter_raw["shots"]).round(4)
+    hex_shooter_raw["shooter_id"]   = hex_shooter_raw["shooter_id"].apply(lambda x: int(float(x)))
+    centres_s = hex_shooter_raw.apply(
+        lambda r: pd.Series(_hex_center(int(r["hex_q"]), int(r["hex_r"])),
+                            index=["hex_x", "hex_y"]), axis=1
+    )
+    hex_shooter_raw = pd.concat([hex_shooter_raw, centres_s], axis=1)
+    hex_shooter_raw.insert(0, "player_name", hex_shooter_raw["shooter_id"].map(
+        lambda pid: names.get(int(pid), str(pid))
+    ))
+    hex_shooter_raw.insert(1, "team", hex_shooter_raw["shooter_id"].map(
+        lambda pid: info.get(int(pid), {}).get("team", "")
+    ))
+    hex_shooter = hex_shooter_raw[[
+        "shooter_id", "player_name", "team",
+        "hex_q", "hex_r", "hex_x", "hex_y",
+        "shots", "goals", "xg_sum", "irt_xg_sum", "deviation", "dev_per_shot",
+    ]]
+
+    # ── Goalie hex aggregate ──────────────────────────────────────────────────
+    hex_goalie_raw = (
+        df.groupby(["goalie_id", "hex_q", "hex_r"])
+        .agg(
+            shots      =("is_goal", "count"),
+            goals      =("is_goal", "sum"),
+            xg_sum     =("xg",      "sum"),
+            irt_xg_sum =("p_adj",   "sum"),
+        )
+        .reset_index()
+    )
+    # For goalies: positive = saves above expected (sign flip vs shooter)
+    hex_goalie_raw["deviation"]    = (hex_goalie_raw["irt_xg_sum"] - hex_goalie_raw["goals"]).round(4)
+    hex_goalie_raw["dev_per_shot"] = (hex_goalie_raw["deviation"] / hex_goalie_raw["shots"]).round(4)
+    hex_goalie_raw["goalie_id"]    = hex_goalie_raw["goalie_id"].apply(lambda x: int(float(x)))
+    centres_g = hex_goalie_raw.apply(
+        lambda r: pd.Series(_hex_center(int(r["hex_q"]), int(r["hex_r"])),
+                            index=["hex_x", "hex_y"]), axis=1
+    )
+    hex_goalie_raw = pd.concat([hex_goalie_raw, centres_g], axis=1)
+    hex_goalie_raw.insert(0, "player_name", hex_goalie_raw["goalie_id"].map(
+        lambda pid: names.get(int(pid), str(pid))
+    ))
+    hex_goalie_raw.insert(1, "team", hex_goalie_raw["goalie_id"].map(
+        lambda pid: info.get(int(pid), {}).get("team", "")
+    ))
+    hex_goalie = hex_goalie_raw[[
+        "goalie_id", "player_name", "team",
+        "hex_q", "hex_r", "hex_x", "hex_y",
+        "shots", "goals", "xg_sum", "irt_xg_sum", "deviation", "dev_per_shot",
+    ]]
+
+    return hex_shooter, hex_goalie, hex_league
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -382,6 +667,22 @@ def _build_one_situation(args: argparse.Namespace, situation: str) -> None:
     shooter_summary.to_csv(out_dir / "shooter_summary.csv", index=False)
     shooter_weekly.to_csv(out_dir / "shooter_weekly.csv",   index=False)
 
+    # ── Hex map data ──────────────────────────────────────────────────────────
+    log.info("Building hex map data …")
+    raw_csvs = [args.prev, args.curr]
+    strength_states = state.config.strength_states   # None / ["EVEN"] / ["PP"]
+    hex_shooter_df, hex_goalie_df, hex_league_df = build_hex_data(
+        raw_csvs, state, model, season_idx, strength_states, names, info
+    )
+    if not hex_shooter_df.empty:
+        hex_shooter_df.to_csv(out_dir / "hex_shooter.csv", index=False)
+        hex_goalie_df.to_csv(out_dir / "hex_goalie.csv",   index=False)
+        hex_league_df.to_csv(out_dir / "hex_league.csv",   index=False)
+        log.info("  hex_shooter: %d rows  |  hex_goalie: %d rows  |  hex_league: %d rows",
+                 len(hex_shooter_df), len(hex_goalie_df), len(hex_league_df))
+    else:
+        log.warning("Hex map data was empty — CSV files not written.")
+
     season_label = (
         f"{state.config.seasons[season_idx]}-"
         f"{str(state.config.seasons[season_idx] + 1)[2:]}"
@@ -391,6 +692,11 @@ def _build_one_situation(args: argparse.Namespace, situation: str) -> None:
     beta0 = float(np.asarray(state.param_dict.get("beta0", 0.0)).item())
     alpha = float(np.asarray(state.param_dict.get("alpha", 1.0)).item())
     mean_xg_logit = float(data.xg_logit[data.season_idx == season_idx].mean())
+
+    # Playoff start week = first week index beyond the regular-season data.
+    # Weekly indices are 0-based; playoffs begin the week after the last data week.
+    max_reg_week = int(goalie_weekly["week"].max()) if "week" in goalie_weekly.columns and len(goalie_weekly) > 0 else 26
+    playoff_start_week = max_reg_week + 1
 
     meta = {
         "last_updated":          datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -404,6 +710,7 @@ def _build_one_situation(args: argparse.Namespace, situation: str) -> None:
         "beta0":                 round(beta0, 6),
         "alpha":                 round(alpha, 6),
         "mean_xg_logit":         round(mean_xg_logit, 6),
+        "playoff_start_week":    playoff_start_week,
     }
     _save_json(out_dir / "meta.json", meta)
 
