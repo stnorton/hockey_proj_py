@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-27 21:11 UTC",
+  "last_updated": "2026-05-27 21:21 UTC",
   "season": "2025-26",
   "situation": "pp",
   "situation_label": "Power Play",
@@ -7,8 +7,8 @@
   "n_shooters": 995,
   "n_goalie_weekly_rows": 5270,
   "n_shooter_weekly_rows": 33830,
-  "beta0": -0.780603,
-  "alpha": 0.661821,
+  "beta0": -0.798002,
+  "alpha": 0.654374,
   "mean_xg_logit": -2.395468,
   "playoff_start_week": 27
 }
