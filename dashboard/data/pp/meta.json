@@ -1,14 +1,14 @@
 {
-  "last_updated": "2026-06-02 20:56 UTC",
+  "last_updated": "2026-06-12 17:30 UTC",
   "season": "2025-26",
   "situation": "pp",
   "situation_label": "Power Play",
   "n_goalies": 126,
   "n_shooters": 995,
-  "n_goalie_weekly_rows": 5270,
-  "n_shooter_weekly_rows": 33830,
-  "beta0": -0.781206,
-  "alpha": 0.661621,
-  "mean_xg_logit": -2.395468,
+  "n_goalie_weekly_rows": 5580,
+  "n_shooter_weekly_rows": 35820,
+  "beta0": -0.777182,
+  "alpha": 0.663652,
+  "mean_xg_logit": -2.394374,
   "playoff_start_week": 27
 }
